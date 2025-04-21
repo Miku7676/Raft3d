@@ -23,20 +23,20 @@ type Printer struct {
 }
 
 type Filament struct {
-	ID              string `json:"id"`
-	Type            string `json:"type"`
-	Color           string `json:"color"`
-	TotalWeight     int    `json:"total_weight_in_grams"`
-	RemainingWeight int    `json:"remaining_weight_in_grams"`
+	ID              string `json:"id"`  //can be int or string but must be unique for every filament
+	Type            string `json:"type"` //type:string; options: PLA, PETG, ABS, TPU
+	Color           string `json:"color"` //type: string; eg: red, blue, black etc
+	TotalWeight     int    `json:"total_weight_in_grams"`  //type: int
+	RemainingWeight int    `json:"remaining_weight_in_grams"`  //type: int
 }
 
 type PrintJob struct {
-	ID         string `json:"id"`
-	PrinterID  string `json:"printer_id"`
-	FilamentID string `json:"filament_id"`
-	Filepath   string `json:"filepath"`
-	Weight     int    `json:"print_weight_in_grams"`
-	Status     string `json:"status"`
+	ID         string `json:"id"`  //can be int or string but must be unique for every print_job
+	PrinterID  string `json:"printer_id"`  //needs to be a valid id of a printer that exists
+	FilamentID string `json:"filament_id"` //needs to be a valid id of a filament that exists
+	Filepath   string `json:"filepath"` //type: string, eg:prints/sword/hilt.gcode
+	Weight     int    `json:"print_weight_in_grams"` //type: int
+	Status     string `json:"status"` //type: string; options: Queued, Running, Cancelled, Done
 }
 
 type Command struct {

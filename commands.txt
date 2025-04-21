@@ -1,3 +1,3 @@
-go run main.go --id=node1 --http=:8080 --raft=:9001 --data=/tmp/raft-node1
-go run main.go --id=node2 --http=:8081 --raft=:9002 --data=/tmp/raft-node2 --join=localhost:8080
-go run main.go --id=node3 --http=:8082 --raft=:9003 --data=/tmp/raft-node3 --join=localhost:8080
+go run main.go --id=node1 --http=:8080 --raft=:9001 --data=./raft-node1
+go run main.go --id=node2 --http=:8081 --raft=:9002 --data=./raft-node2 --join=localhost:8080
+go run main.go --id=node3 --http=:8082 --raft=:9003 --data=./raft-node3 --join=localhost:8080

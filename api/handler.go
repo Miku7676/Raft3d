@@ -2,7 +2,7 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -65,50 +65,183 @@ func joinHandler(w http.ResponseWriter, r *http.Request, raftNode *hashicraft.Ra
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	fmt.Fprintf(w, "Node %s joined at %s", nodeID, addr)
+	log.Printf("Node %s joined at %s", nodeID, addr)
 }
 
 func createPrintersHandler(w http.ResponseWriter, r *http.Request, raftNode *hashicraft.Raft) {
-	var req store.Printers
-	json.NewDecoder(r.Body).Decode(&req)
-	for _, entry := range req.Entries {
-		payload, _ := json.Marshal(entry.Value)
-		cmd, _ := json.Marshal(store.Command{Type: store.AddPrinter, Payload: payload})
-		raftNode.Apply(cmd, 5*time.Second)
+	if raftNode.State() != hashicraft.Leader {
+		http.Error(w, "Not the leader", http.StatusForbidden)
+		return
 	}
+	var req store.Printer
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	// for _, entry := range req.Entries {
+	// 	payload, _ := json.Marshal(entry.Value)
+	// 	cmd, _ := json.Marshal(store.Command{Type: store.AddPrinter, Payload: payload})
+	// 	f := raftNode.Apply(cmd, 5*time.Second)
+	// 	if err := f.Error(); err != nil {
+	// 		log.Println("Apply failed:", err)
+	// 		http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 		return
+	// 	}
+	// }
+
+	// for _, entry := range req.Entries {
+	// 	// Make sure the ID field is set from the Key if needed
+	// 	printer := entry.Value
+	// 	if printer.ID == "" {
+	// 		printer.ID = entry.Key
+	// 	}
+	//
+	// 	payload, _ := json.Marshal(printer)
+	// 	cmd, _ := json.Marshal(store.Command{Type: store.AddPrinter, Payload: payload})
+	//
+	// 	f := raftNode.Apply(cmd, 5*time.Second)
+	// 	if err := f.Error(); err != nil {
+	// 		log.Println("Apply failed:", err)
+	// 		http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 		return
+	// 	}
+	// }
+
+	if req.ID == "" {
+		http.Error(w, "Printer ID is required", http.StatusBadRequest)
+		return
+	}
+
+	payload, _ := json.Marshal(req)
+	cmd, _ := json.Marshal(store.Command{Type: store.AddPrinter, Payload: payload})
+	f := raftNode.Apply(cmd, 5*time.Second)
+	if err := f.Error(); err != nil {
+		log.Println("Apply failed:", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 }
 
 func getPrintersHandler(w http.ResponseWriter, r *http.Request, fsm *raft.FSM) {
 	fsm.Mu.Lock()
 	defer fsm.Mu.Unlock()
-	json.NewEncoder(w).Encode(fsm.Printers)
+
+	response := store.Printers{
+		Entries: make([]struct {
+			Key   string        `json:"key"`
+			Value store.Printer `json:"value"`
+		}, 0, len(fsm.Printers)),
+	}
+
+	for id, printer := range fsm.Printers {
+		response.Entries = append(response.Entries, struct {
+			Key   string        `json:"key"`
+			Value store.Printer `json:"value"`
+		}{
+				Key:   id,
+				Value: printer,
+			})
+	}
+
+	json.NewEncoder(w).Encode(response)
 }
 
 func createFilamentsHandler(w http.ResponseWriter, r *http.Request, raftNode *hashicraft.Raft) {
-	var req store.Filaments
-	json.NewDecoder(r.Body).Decode(&req)
-	for _, entry := range req.Entries {
-		payload, _ := json.Marshal(entry.Value)
-		cmd, _ := json.Marshal(store.Command{Type: store.AddFilament, Payload: payload})
-		raftNode.Apply(cmd, 5*time.Second)
+	if raftNode.State() != hashicraft.Leader {
+		http.Error(w, "Not the leader", http.StatusForbidden)
+		return
 	}
+	var req store.Filament
+	json.NewDecoder(r.Body).Decode(&req)
+
+	// for _, entry := range req.Entries {
+	// 	payload, _ := json.Marshal(entry.Value)
+	// 	cmd, _ := json.Marshal(store.Command{Type: store.AddFilament, Payload: payload})
+	// 	f := raftNode.Apply(cmd, 5*time.Second)
+	// 	if err := f.Error(); err != nil {
+	// 		log.Println("Apply failed:", err)
+	// 		http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 		return
+	// 	}
+	// }
+
+	if req.ID == "" {
+		http.Error(w, "Printer ID is required", http.StatusBadRequest)
+		return
+	}
+
+	payload, _ := json.Marshal(req)
+	cmd, _ := json.Marshal(store.Command{Type: store.AddFilament, Payload: payload})
+	f := raftNode.Apply(cmd, 5*time.Second)
+	if err := f.Error(); err != nil {
+		log.Println("Apply failed:", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 }
 
 func getFilamentsHandler(w http.ResponseWriter, r *http.Request, fsm *raft.FSM) {
 	fsm.Mu.Lock()
 	defer fsm.Mu.Unlock()
-	json.NewEncoder(w).Encode(fsm.Filaments)
+	response := store.Filaments{
+		Entries: make([]struct {
+			Key   string        `json:"key"`
+			Value store.Filament `json:"value"`
+		}, 0, len(fsm.Filaments)),
+	}
+
+	for id, filament := range fsm.Filaments {
+		response.Entries = append(response.Entries, struct {
+			Key   string        `json:"key"`
+			Value store.Filament `json:"value"`
+		}{
+				Key:   id,
+				Value: filament,
+			})
+	}
+
+	json.NewEncoder(w).Encode(response)
+
 }
 
 func createPrintJobsHandler(w http.ResponseWriter, r *http.Request, raftNode *hashicraft.Raft) {
-	var req store.PrintJobs
-	json.NewDecoder(r.Body).Decode(&req)
-	for _, entry := range req.Entries {
-		payload, _ := json.Marshal(entry.Value)
-		cmd, _ := json.Marshal(store.Command{Type: store.AddJob, Payload: payload})
-		raftNode.Apply(cmd, 5*time.Second)
+	if raftNode.State() != hashicraft.Leader {
+		http.Error(w, "Not the leader", http.StatusForbidden)
+		return
+	}
+	var req store.PrintJob
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	// for _, entry := range req.Entries {
+	// 	payload, _ := json.Marshal(entry.Value)
+	// 	cmd, _ := json.Marshal(store.Command{Type: store.AddJob, Payload: payload})
+	// 	f := raftNode.Apply(cmd, 5*time.Second)
+	// 	if err := f.Error(); err != nil {
+	// 		log.Println("Apply failed:", err)
+	// 		http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 		return
+	// 	}
+	// }
+
+	if req.ID == "" {
+		http.Error(w, "Printer ID is required", http.StatusBadRequest)
+		return
+	}
+
+	payload, _ := json.Marshal(req)
+	cmd, _ := json.Marshal(store.Command{Type: store.AddJob, Payload: payload})
+	f := raftNode.Apply(cmd, 5*time.Second)
+	if err := f.Error(); err != nil {
+		log.Println("Apply failed:", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	w.WriteHeader(http.StatusOK)
 }
@@ -116,10 +249,32 @@ func createPrintJobsHandler(w http.ResponseWriter, r *http.Request, raftNode *ha
 func getPrintJobsHandler(w http.ResponseWriter, r *http.Request, fsm *raft.FSM) {
 	fsm.Mu.Lock()
 	defer fsm.Mu.Unlock()
-	json.NewEncoder(w).Encode(fsm.Jobs)
+
+	response := store.PrintJobs{
+		Entries: make([]struct {
+			Key   string        `json:"key"`
+			Value store.PrintJob `json:"value"`
+		}, 0, len(fsm.Jobs)),
+	}
+
+	for id, job := range fsm.Jobs {
+		response.Entries = append(response.Entries, struct {
+			Key   string        `json:"key"`
+			Value store.PrintJob `json:"value"`
+		}{
+				Key:   id,
+				Value: job,
+			})
+	}
+
+	json.NewEncoder(w).Encode(response)
 }
 
 func updatePrintJobStatusHandler(w http.ResponseWriter, r *http.Request, raftNode *hashicraft.Raft) {
+	if raftNode.State() != hashicraft.Leader {
+		http.Error(w, "Not the leader", http.StatusForbidden)
+		return
+	}
 	jobID := chi.URLParam(r, "job_id")
 	newStatus := r.URL.Query().Get("status")
 	if jobID == "" || newStatus == "" {
