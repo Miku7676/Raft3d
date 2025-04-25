@@ -44,7 +44,7 @@ func RegisterRoutes(r chi.Router, raftNode *hashicraft.Raft, fsm *raft.FSM) {
 		})
 
 		r.Post("/print_jobs/{job_id}/status", func(w http.ResponseWriter, r *http.Request) {
-			updatePrintJobStatusHandler(w, r, raftNode)
+			updatePrintJobStatusHandler(w, r, raftNode, fsm)
 		})
 	})
 }
@@ -270,7 +270,7 @@ func getPrintJobsHandler(w http.ResponseWriter, r *http.Request, fsm *raft.FSM) 
 	json.NewEncoder(w).Encode(response)
 }
 
-func updatePrintJobStatusHandler(w http.ResponseWriter, r *http.Request, raftNode *hashicraft.Raft) {
+func updatePrintJobStatusHandler(w http.ResponseWriter, r *http.Request, raftNode *hashicraft.Raft, fsm *raft.FSM) {
 	if raftNode.State() != hashicraft.Leader {
 		http.Error(w, "Not the leader", http.StatusForbidden)
 		return
@@ -282,12 +282,25 @@ func updatePrintJobStatusHandler(w http.ResponseWriter, r *http.Request, raftNod
 		return
 	}
 
-	update := store.PrintJob{
-		ID:     jobID,
-		Status: newStatus,
+	if newStatus != store.Running && newStatus != store.Done && newStatus != store.Cancelled {
+		http.Error(w, "Invalid status value", http.StatusBadRequest)
+		return
 	}
 
-	payload, _ := json.Marshal(update)
+	fsm.Mu.Lock()
+	existingJob, exists := fsm.Jobs[jobID]
+	fsm.Mu.Unlock()
+
+	if !exists {
+		http.Error(w, "Job not found", http.StatusNotFound)
+		return
+	}
+
+	// Update only the status field
+	updatedJob := existingJob
+	updatedJob.Status = newStatus
+
+	payload, _ := json.Marshal(existingJob)
 	cmd, _ := json.Marshal(store.Command{Type: store.UpdateJob, Payload: payload})
 	f := raftNode.Apply(cmd, 5*time.Second)
 	if err := f.Error(); err != nil {
